@@ -29,12 +29,9 @@ class suffix_array:
 
 class overlap_graph:
 
-    def __init__(self, reads, k=12, error_prone=False, tests=False):
+    def __init__(self, reads, k=12, error_tolerance=0.05, tests=False):
         self.reads = reads[:]
-        self.error_prone = error_prone
-        #self.concatenated_reads = '$'.join(reads) + '$'
-        #self.suffix_array = suffix_array(self.concatenated_reads)
-        #self.bwt = self.suffix_array.bwt
+        self.error_tolerance = error_tolerance
         self.candidate_pairs = self.__find_candidate_pairs(k)
         self.overlaps = self.__find_overlaps()
         self.hamiltonian_path = []
@@ -50,13 +47,17 @@ class overlap_graph:
         #output += f'Candidate Genome: {self.candidate_genome}'
         return output
 
+    # function to calculate the number of character mismatches in two strings of the same length
+    def hamming_value(self, string1, string2):
+        return sum(char1 != char2 for char1, char2 in zip(string1, string2))
+
     def find_longest_overlap(self, read1, read2):
         max_length = 0
         min_length = min(len(read1), len(read2))
         for i in range(1, min_length + 1):
             suffix = read1[-i:]
             prefix = read2[:i]
-            if suffix == prefix:
+            if self.hamming_value(suffix, prefix)/i <= self.error_tolerance:
                 max_length = i
         return max_length
 
@@ -84,30 +85,6 @@ class overlap_graph:
                         candidate_pairs.add((i, index))
         return candidate_pairs
 
-    def __find_hamiltonian_path_deep(self):
-        path = [0]
-        visited = set(path)
-        best_path = []
-
-        def dfs(current_index, current_path, current_visited):
-            nonlocal best_path
-            if len(current_path) == len(self.reads):
-                total_overlap = sum(self.overlaps.get((current_path[i-1], current_path[i]), 0) for i in range(1, len(current_path)))
-                if total_overlap < self.best_weight:
-                    self.best_weight = total_overlap
-                    best_path = current_path[:]
-                return
-            for neighbor in [j for i, j in self.candidate_pairs if i == current_index and j not in current_visited]:
-                current_path.append(neighbor)
-                current_visited.add(neighbor)
-                dfs(neighbor, current_path, current_visited)
-                current_path.pop()
-                current_visited.remove(neighbor)
-
-        dfs(0, path, visited)
-        best_path.append(0)
-        return best_path
-
     def __find_hamiltonian_path_greedy(self, start=0):
         path = [start]
         visited = set(path)
@@ -133,22 +110,15 @@ class overlap_graph:
         else:
             return genome[:-overlap]
 
-    def compute_candidate_genome(self, deep_search=False):
-        if deep_search:
-            self.hamiltonian_path = self.__find_hamiltonian_path_deep()
-        else:
-            for i in range(1):
-                temp_path, weight = self.__find_hamiltonian_path_greedy(start=i)
-                #print(f'\nstarted at read index {i}', end=', ')
-                if weight > self.best_weight:
-                    #print(f'updated best path {temp_path}', end='')
-                    self.best_weight = weight
-                    self.hamiltonian_path = temp_path
+    def compute_candidate_genome(self):
+        temp_path, weight = self.__find_hamiltonian_path_greedy(start=i)
+        if weight > self.best_weight:
+            self.best_weight = weight
+            self.hamiltonian_path = temp_path
         self.candidate_genome = self.assemble_genome(start=self.hamiltonian_path[0])
 
     def print_genome(self):
         print(self.candidate_genome)
-        #print(f'Path: {self.hamiltonian_path}')
 
 def parse_input(test=False):
     if test:
@@ -160,10 +130,9 @@ def parse_input(test=False):
     return list(set(sys.stdin.read().strip().split()))
 
 def main():
-
     reads = parse_input(test=False)
-    graph = overlap_graph(reads, k=12, error_prone=False)
-    graph.compute_candidate_genome(deep_search=False)
+    graph = overlap_graph(reads, k=12, error_tolerance=0.05)
+    graph.compute_candidate_genome()
     graph.print_genome()
 
 if __name__ == '__main__':
