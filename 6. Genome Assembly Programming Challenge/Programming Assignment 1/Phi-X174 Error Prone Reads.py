@@ -48,8 +48,14 @@ class overlap_graph:
         return output
 
     # function to calculate the number of character mismatches in two strings of the same length
-    def hamming_value(self, string1, string2):
-        return sum(char1 != char2 for char1, char2 in zip(string1, string2))
+    def error_value(self, string1, string2):
+        error = 0
+        for char1, char2 in zip(string1, string2):
+            if char1 != char2:
+                error += 1
+            if error > 1:
+                return False
+        return True
 
     def find_longest_overlap(self, read1, read2):
         max_length = 0
@@ -57,7 +63,7 @@ class overlap_graph:
         for i in range(1, min_length + 1):
             suffix = read1[-i:]
             prefix = read2[:i]
-            if self.hamming_value(suffix, prefix)/i <= self.error_tolerance:
+            if self.error_value(suffix, prefix):
                 max_length = i
         return max_length
 
@@ -92,7 +98,10 @@ class overlap_graph:
         current_weight = 0
         total_weight = 0
         while len(path) < len(self.reads):
-            current_weight, current_index = max((self.overlaps.get((current_index, j), 0), j) for i, j in self.candidate_pairs if i == current_index and j not in visited)
+            candidates = [(self.overlaps.get((current_index, j), 0), j) for i, j in self.candidate_pairs if i == current_index and j not in visited]
+            if not candidates:
+                return path, total_weight
+            current_weight, current_index = max(candidates)
             total_weight += current_weight
             path.append(current_index)
             visited.add(current_index)
@@ -111,7 +120,7 @@ class overlap_graph:
             return genome[:-overlap]
 
     def compute_candidate_genome(self):
-        temp_path, weight = self.__find_hamiltonian_path_greedy(start=i)
+        temp_path, weight = self.__find_hamiltonian_path_greedy()
         if weight > self.best_weight:
             self.best_weight = weight
             self.hamiltonian_path = temp_path
